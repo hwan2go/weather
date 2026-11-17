@@ -46,12 +46,14 @@
   .sec-title span { font-size: 11px; opacity: .6; }
   .weekly { margin-top: 20px; padding: 14px 12px 8px; text-align: left; border-radius: 26px; background: rgba(255,255,255,.55); }
   body.night .weekly { background: rgba(255,255,255,.12); }
-  .day { display: grid; grid-template-columns: 38px 30px 40px 28px 1fr 28px; align-items: center; gap: 4px; padding: 7px 2px; border-top: 1px dashed rgba(120,100,160,.25); font-size: 15px; }
+  .day { display: grid; grid-template-columns: 36px 28px 38px 46px 1fr 46px; align-items: center; gap: 4px; padding: 7px 2px; border-top: 1px dashed rgba(120,100,160,.25); font-size: 15px; }
   .day:first-of-type { border-top: 0; }
   .day .dn { font-size: 14px; } .day .dn.sat { color: #5b8def; } .day .dn.sun { color: #e8648c; } .day .dn.today { font-weight: bold; }
   .day .di { font-size: 22px; text-align: center; }
   .day .dp { font-size: 11px; opacity: .75; }
-  .day .lo { text-align: right; opacity: .7; } .day .hi { text-align: left; }
+  .day .lo { text-align: right; color: #4f86d8; } .day .hi { text-align: left; color: #e0577f; }
+  body.night .day .lo { color: #a9ccff; } body.night .day .hi { color: #ffb0c8; }
+  .day .lo small, .day .hi small { display: block; font-size: 10px; line-height: 1; opacity: .8; margin-bottom: 2px; }
   .bar { position: relative; height: 6px; border-radius: 3px; background: rgba(120,100,160,.18); }
   .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, #8ec5ff, #ffb6cc); }
   .hourly h2 { font-size: 15px; font-weight: normal; margin: 0 0 8px 4px; opacity: .8; }
@@ -178,9 +180,9 @@ function renderWeekly(dd) {
     row.innerHTML = '<div class="dn' + (i === 0 ? " today" : wd === 6 ? " sat" : wd === 0 ? " sun" : "") + '">' + name + '</div>' +
       '<div class="di">' + icon + '</div>' +
       '<div class="dp">' + (pop > 0 ? "💧" + pop + "%" : "") + '</div>' +
-      '<div class="lo">' + Math.round(mn) + '°</div>' +
+      '<div class="lo"><small>최저</small>' + Math.round(mn) + '°</div>' +
       '<div class="bar"><i style="left:' + ((mn - lo) / span * 100) + '%;right:' + ((hi - mx) / span * 100) + '%"></i></div>' +
-      '<div class="hi">' + Math.round(mx) + '°</div>';
+      '<div class="hi"><small>최고</small>' + Math.round(mx) + '°</div>';
     box.appendChild(row);
   });
 }
