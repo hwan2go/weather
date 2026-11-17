@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>고양 날씨</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: 'Jua', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    background: linear-gradient(160deg, #ffe3ec, #e3f0ff); color: #4a4458;
+    transition: background .6s;
+  }
+  body.sunny  { background: linear-gradient(160deg, #fff1c9, #ffd9e2); }
+  body.cloudy { background: linear-gradient(160deg, #e8ecf5, #d6dff0); }
+  body.rainy  { background: linear-gradient(160deg, #cfe0f5, #b8c6e6); }
+  body.snowy  { background: linear-gradient(160deg, #f2f6ff, #dfe7fb); }
+  body.night  { background: linear-gradient(160deg, #3b3a6b, #6b5b95); color: #f3eefc; }
+  .card {
+    width: min(92vw, 380px); padding: 28px 24px; text-align: center;
+    background: rgba(255,255,255,.65); border-radius: 36px;
+    box-shadow: 0 12px 40px rgba(120,100,160,.2); backdrop-filter: blur(8px);
+  }
+  body.night .card { background: rgba(255,255,255,.12); }
+  select {
+    font: inherit; font-size: 17px; padding: 6px 14px; border: 2px solid #fff;
+    border-radius: 20px; background: rgba(255,255,255,.9); color: #4a4458; cursor: pointer;
+  }
+  select option, select optgroup { background: #fff; color: #4a4458; }
+  select optgroup { color: #d6648a; font-weight: bold; }
+  .date { margin-top: 14px; font-size: 15px; opacity: .8; }
+  .time { font-size: 52px; letter-spacing: 2px; margin: 2px 0 6px; }
+  .icon { font-size: 96px; line-height: 1.1; animation: float 3s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateY(-8px); } }
+  .temp { font-size: 64px; margin: 4px 0 0; }
+  .desc { font-size: 20px; margin-top: 2px; }
+  .feel { font-size: 14px; opacity: .75; margin-top: 8px; }
+  .msg { margin-top: 18px; padding: 10px 14px; border-radius: 18px; background: rgba(255,255,255,.6); font-size: 15px; }
+  body.night .msg { background: rgba(255,255,255,.15); }
+  .small { margin-top: 14px; font-size: 12px; opacity: .6; }
+  button { font: inherit; font-size: 13px; margin-top: 10px; padding: 6px 14px; border: 0; border-radius: 16px; background: #ffb6cc; color: #fff; cursor: pointer; }
+</style>
+</head>
+<body>
+<div class="card">
+  <select id="city"></select>
+  <div class="date" id="date"></div>
+  <div class="time" id="time">--:--</div>
+  <div class="icon" id="icon">⏳</div>
+  <div class="temp" id="temp">--°</div>
+  <div class="desc" id="desc">불러오는 중...</div>
+  <div class="feel" id="feel"></div>
+  <div class="msg" id="msg">날씨를 가져오고 있어요 ☁️</div>
+  <button id="loc">📍 내 위치로 보기</button>
+  <div class="small" id="small"></div>
+</div>
+
+<script>
+// 한국 주요 도시 (위도, 경도)
+// 고양시 동네별 대략적인 중심 좌표 (위도, 경도)
+const GROUPS = {
+  "일산동구": {
+    "마두동": [37.6525, 126.7775], "백석동": [37.6432, 126.7880], "장항동": [37.6580, 126.7640],
+    "중산동": [37.6690, 126.7830], "풍동": [37.6770, 126.7900], "식사동": [37.6850, 126.8180],
+    "정발산": [37.6595, 126.7740]
+  },
+  "일산서구": {
+    "주엽동": [37.6700, 126.7611], "대화동": [37.6763, 126.7473], "탄현동": [37.6930, 126.7670],
+    "일산동": [37.6824, 126.7691], "덕이동": [37.7010, 126.7530], "킨텍스": [37.6690, 126.7450]
+  },
+  "덕양구": {
+    "화정동": [37.6340, 126.8320], "행신동": [37.6125, 126.8330], "능곡동": [37.6180, 126.8170],
+    "원당동": [37.6531, 126.8429], "성사동": [37.6500, 126.8340], "원흥동": [37.6450, 126.8730],
+    "삼송동": [37.6531, 126.8957], "향동동": [37.6020, 126.8800], "관산동": [37.6990, 126.8880]
+  }
+};
+const CITIES = {};
+for (const g in GROUPS) Object.assign(CITIES, GROUPS[g]);
+// WMO 날씨코드 -> [이모지, 설명, 테마]
+function wmo(c, isDay) {
+  if (c === 0) return isDay ? ["☀️","맑음","sunny"] : ["🌙","맑은 밤","night"];
+  if (c <= 2) return isDay ? ["🌤️","구름 조금","sunny"] : ["☁️","구름 조금","night"];
+  if (c === 3) return ["☁️","흐림","cloudy"];
+  if (c <= 48) return ["🌫️","안개","cloudy"];
+  if (c <= 57) return ["🌦️","이슬비","rainy"];
+  if (c <= 67) return ["🌧️","비","rainy"];
+  if (c <= 77) return ["❄️","눈","snowy"];
+  if (c <= 82) return ["🌧️","소나기","rainy"];
+  if (c <= 86) return ["🌨️","눈보라","snowy"];
+  return ["⛈️","천둥번개","rainy"];
+}
+function message(t, theme) {
+  if (theme === "rainy") return "우산 꼭 챙기세요 ☂️";
+  if (theme === "snowy") return "눈이 와요, 미끄럼 조심! ⛄";
+  if (t <= 0) return "꽁꽁 추워요, 두툼하게 입어요 🧣";
+  if (t <= 10) return "쌀쌀해요, 따뜻한 겉옷 필요해요 🧥";
+  if (t <= 20) return "선선해서 나들이하기 좋아요 🌸";
+  if (t <= 27) return "포근한 하루예요 😊";
+  return "더워요, 물 많이 마셔요 🧊";
+}
+
+const $ = id => document.getElementById(id);
+const sel = $("city");
+const meOpt = new Option("📍 내 위치", "__me__"); meOpt.hidden = true; sel.add(meOpt);
+for (const g in GROUPS) {
+  const og = document.createElement("optgroup"); og.label = g;
+  for (const name in GROUPS[g]) og.appendChild(new Option(name, name));
+  sel.appendChild(og);
+}
+let current = "마두동";
+sel.value = current;
+
+// 현재 시간 (한국 시간)
+function tick() {
+  const now = new Date();
+  $("time").textContent = now.toLocaleTimeString("ko-KR", { timeZone: "Asia/Seoul", hour: "2-digit", minute: "2-digit", hour12: false });
+  $("date").textContent = now.toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "long" });
+}
+tick(); setInterval(tick, 1000);
+
+async function load(lat, lon) {
+  try {
+    const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
+      `&current=temperature_2m,apparent_temperature,weather_code,is_day&timezone=Asia%2FSeoul`;
+    const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 10000);
+    const res = await fetch(url, { signal: ctl.signal }); clearTimeout(to);
+    if (!res.ok) throw new Error("서버 응답 " + res.status);
+    const d = (await res.json()).current;
+    const [icon, desc, theme] = wmo(d.weather_code, d.is_day);
+    const t = Math.round(d.temperature_2m);
+    $("icon").textContent = icon;
+    $("temp").textContent = t + "°";
+    $("desc").textContent = desc;
+    $("feel").textContent = "체감 " + Math.round(d.apparent_temperature) + "°";
+    $("msg").textContent = message(t, theme);
+    $("small").textContent = "기준 " + d.time.replace("T", " ") + " · Open-Meteo";
+    document.body.className = d.is_day ? theme : "night";
+  } catch (e) {
+    $("icon").textContent = "😢";
+    $("desc").textContent = "날씨를 못 가져왔어요";
+    $("msg").textContent = "인터넷 연결을 확인하고 새로고침해 주세요";
+    $("small").textContent = "오류: " + (e.name === "AbortError" ? "응답 시간 초과" : e.message);
+  }
+}
+
+sel.onchange = () => {
+  if (sel.value === "__me__") return;
+  current = sel.value; load(...CITIES[current]);
+};
+
+// 내 위치: 실제 좌표로 날씨를 보고, 가장 가까운 도시 이름을 표시
+$("loc").onclick = () => {
+  if (!navigator.geolocation) return alert("이 브라우저는 위치 기능을 지원하지 않아요");
+  $("loc").textContent = "📍 위치 찾는 중...";
+  navigator.geolocation.getCurrentPosition(p => {
+    const { latitude: la, longitude: lo } = p.coords;
+    let best = "마두동", min = Infinity;
+    for (const [n, [a, b]] of Object.entries(CITIES)) {
+      const d = (a - la) ** 2 + ((b - lo) * Math.cos(la * Math.PI / 180)) ** 2;
+      if (d < min) { min = d; best = n; }
+    }
+    const km = Math.sqrt(min) * 111;
+    meOpt.text = km > 12 ? "📍 내 위치 (고양시 밖)" : "📍 내 위치 (고양시 " + best + " 근처)"; meOpt.hidden = false; sel.value = "__me__";
+    $("loc").textContent = "📍 내 위치로 보기";
+    load(la, lo);
+  }, err => {
+    $("loc").textContent = "📍 내 위치로 보기";
+    alert(err.code === 1 ? "위치 권한이 꺼져 있어요. 브라우저 설정에서 허용해 주세요." : "위치를 찾지 못했어요. 잠시 후 다시 눌러 주세요.");
+  }, { timeout: 10000, maximumAge: 300000 });
+};
+
+load(...CITIES[current]);
+</script>
+</body>
+</html>
