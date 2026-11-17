@@ -143,7 +143,7 @@ for (const g in GROUPS) {
   for (const name in GROUPS[g]) og.appendChild(new Option(name, name));
   sel.appendChild(og);
 }
-let current = "마두동";
+let current = "원흥동";
 sel.value = current;
 
 // 현재 시간 (한국 시간)
@@ -191,7 +191,12 @@ function renderWeekly(dd) {
   });
 }
 
+// 30분마다 자동 새로고침 (선택한 동네 또는 내 위치 기준)
+const REFRESH_MS = 30 * 60 * 1000;
+let lastCoords = null, lastLoaded = 0;
+
 async function load(lat, lon) {
+  lastCoords = [lat, lon]; lastLoaded = Date.now();
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
       `&current=temperature_2m,apparent_temperature,weather_code,is_day` +
@@ -236,7 +241,7 @@ $("loc").onclick = () => {
   $("loc").textContent = "📍 위치 찾는 중...";
   navigator.geolocation.getCurrentPosition(p => {
     const { latitude: la, longitude: lo } = p.coords;
-    let best = "마두동", min = Infinity;
+    let best = "원흥동", min = Infinity;
     for (const [n, [a, b]] of Object.entries(CITIES)) {
       const d = (a - la) ** 2 + ((b - lo) * Math.cos(la * Math.PI / 180)) ** 2;
       if (d < min) { min = d; best = n; }
@@ -357,6 +362,11 @@ addEventListener("resize", resize);
 resize(); draw();
 
 load(...CITIES[current]);
+setInterval(() => lastCoords && load(...lastCoords), REFRESH_MS);
+// 폰이 잠자기 후 돌아왔을 때 30분 넘게 지났으면 바로 새로고침
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden && lastCoords && Date.now() - lastLoaded >= REFRESH_MS) load(...lastCoords);
+});
 </script>
 </body>
 </html>
