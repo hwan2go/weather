@@ -38,6 +38,17 @@
   .feel { font-size: 14px; opacity: .75; margin-top: 8px; }
   .msg { margin-top: 18px; padding: 10px 14px; border-radius: 18px; background: rgba(255,255,255,.6); font-size: 15px; }
   body.night .msg { background: rgba(255,255,255,.15); }
+  .hourly { margin-top: 18px; text-align: left; }
+  .hourly h2 { font-size: 15px; font-weight: normal; margin: 0 0 8px 4px; opacity: .8; }
+  .strip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px; scroll-snap-type: x proximity; }
+  .hr { flex: 0 0 auto; width: 62px; padding: 10px 0; text-align: center; border-radius: 20px;
+        background: rgba(255,255,255,.6); scroll-snap-align: start; }
+  body.night .hr { background: rgba(255,255,255,.15); }
+  body .hr.now { background: #ffb6cc; color: #fff; }
+  .hr .h { font-size: 13px; opacity: .85; }
+  .hr .i { font-size: 26px; margin: 4px 0 2px; }
+  .hr .t { font-size: 17px; }
+  .hr .p { font-size: 11px; min-height: 14px; margin-top: 2px; opacity: .8; }
   .small { margin-top: 14px; font-size: 12px; opacity: .6; }
   button { font: inherit; font-size: 13px; margin-top: 10px; padding: 6px 14px; border: 0; border-radius: 16px; background: #ffb6cc; color: #fff; cursor: pointer; }
 </style>
@@ -52,6 +63,7 @@
   <div class="desc" id="desc">불러오는 중...</div>
   <div class="feel" id="feel"></div>
   <div class="msg" id="msg">날씨를 가져오고 있어요 ☁️</div>
+  <div class="hourly"><h2>시간별 예보</h2><div class="strip" id="strip"></div></div>
   <button id="loc">📍 내 위치로 보기</button>
   <div class="small" id="small"></div>
 </div>
@@ -119,14 +131,34 @@ function tick() {
 }
 tick(); setInterval(tick, 1000);
 
+function renderHourly(h, nowTime) {
+  const strip = $("strip"); strip.innerHTML = "";
+  let start = h.time.findIndex(t => t >= nowTime.slice(0, 13));
+  if (start < 0) start = 0;
+  for (let i = start; i < Math.min(start + 24, h.time.length); i++) {
+    const [icon] = wmo(h.weather_code[i], h.is_day[i]);
+    const hour = Number(h.time[i].slice(11, 13));
+    const pop = h.precipitation_probability[i];
+    const el = document.createElement("div");
+    el.className = "hr" + (i === start ? " now" : "");
+    el.innerHTML = '<div class="h">' + (i === start ? "지금" : hour + "시") + '</div>' +
+      '<div class="i">' + icon + '</div>' +
+      '<div class="t">' + Math.round(h.temperature_2m[i]) + '°</div>' +
+      '<div class="p">' + (pop > 0 ? "💧" + pop + "%" : "") + '</div>';
+    strip.appendChild(el);
+  }
+}
+
 async function load(lat, lon) {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
-      `&current=temperature_2m,apparent_temperature,weather_code,is_day&timezone=Asia%2FSeoul`;
+      `&current=temperature_2m,apparent_temperature,weather_code,is_day` +
+      `&hourly=temperature_2m,weather_code,precipitation_probability,is_day&forecast_days=2&timezone=Asia%2FSeoul`;
     const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 10000);
     const res = await fetch(url, { signal: ctl.signal }); clearTimeout(to);
     if (!res.ok) throw new Error("서버 응답 " + res.status);
-    const d = (await res.json()).current;
+    const data = await res.json();
+    const d = data.current;
     const [icon, desc, theme] = wmo(d.weather_code, d.is_day);
     const t = Math.round(d.temperature_2m);
     $("icon").textContent = icon;
@@ -136,6 +168,7 @@ async function load(lat, lon) {
     $("msg").textContent = message(t, theme);
     $("small").textContent = "기준 " + d.time.replace("T", " ") + " · Open-Meteo";
     document.body.className = d.is_day ? theme : "night";
+    renderHourly(data.hourly, d.time);
   } catch (e) {
     $("icon").textContent = "😢";
     $("desc").textContent = "날씨를 못 가져왔어요";
