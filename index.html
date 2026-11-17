@@ -43,6 +43,18 @@
   .feel { font-size: 14px; opacity: .75; margin-top: 8px; }
   .msg { margin-top: 18px; padding: 10px 14px; border-radius: 18px; background: rgba(255,255,255,.6); font-size: 15px; }
   body.night .msg { background: rgba(255,255,255,.15); }
+  .air { margin-top: 16px; padding: 12px; text-align: left; border-radius: 22px; background: rgba(255,255,255,.55); }
+  body.night .air { background: rgba(255,255,255,.12); }
+  .air .sec-title { margin-bottom: 8px; }
+  .badge { padding: 2px 10px; border-radius: 12px; font-size: 12px; color: #fff; background: #b9b2c9; }
+  .aq-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .aq { padding: 8px 10px; border-radius: 16px; background: rgba(255,255,255,.65); }
+  body.night .aq { background: rgba(255,255,255,.12); }
+  .aq .n { font-size: 12px; opacity: .75; }
+  .aq .v { font-size: 22px; margin: 2px 0 4px; } .aq .v small { font-size: 11px; opacity: .7; }
+  .aq .g { font-size: 13px; display: inline-flex; align-items: center; gap: 5px; }
+  .aq .g i { width: 9px; height: 9px; border-radius: 50%; background: #b9b2c9; display: inline-block; }
+  .aq-note { margin-top: 6px; font-size: 10px; opacity: .55; }
   .hourly { margin-top: 18px; text-align: left; }
   .sec-title { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 8px; }
   .sec-title b { font-size: 15px; font-weight: normal; }
@@ -85,6 +97,14 @@
   <div class="desc" id="desc">불러오는 중...</div>
   <div class="feel" id="feel"></div>
   <div class="msg" id="msg">날씨를 가져오고 있어요 ☁️</div>
+  <div class="air">
+    <div class="sec-title"><b>🌫️ 대기질</b><span class="badge" id="aqBadge">확인 중</span></div>
+    <div class="aq-grid">
+      <div class="aq"><div class="n">미세먼지 PM10</div><div class="v" id="v10">--</div><div class="g"><i id="d10"></i><span id="g10">-</span></div></div>
+      <div class="aq"><div class="n">초미세먼지 PM2.5</div><div class="v" id="v25">--</div><div class="g"><i id="d25"></i><span id="g25">-</span></div></div>
+    </div>
+    <div class="aq-note" id="aqNote"></div>
+  </div>
   <div class="hourly"><div class="sec-title"><b>⏰ 시간별 예보</b><span>옆으로 밀어 보세요 →</span></div><div class="strip" id="strip"></div></div>
   <div class="weekly"><div class="sec-title"><b>🗓️ 주간 예보</b><span>7일</span></div><div id="week"></div></div>
   <button id="loc">📍 내 위치로 보기</button>
@@ -172,6 +192,32 @@ function renderHourly(h, nowTime) {
   }
 }
 
+// 한국 기준 등급 (㎍/㎥)
+const AQ_COLORS = ["#4f86d8", "#3aa76d", "#f08a24", "#e0405f"], AQ_NAMES = ["좋음", "보통", "나쁨", "매우나쁨"];
+const grade10 = v => v <= 30 ? 0 : v <= 80 ? 1 : v <= 150 ? 2 : 3;
+const grade25 = v => v <= 15 ? 0 : v <= 35 ? 1 : v <= 75 ? 2 : 3;
+function airCell(id, v, g) {
+  $("v" + id).innerHTML = Math.round(v) + "<small> ㎍/㎥</small>";
+  $("g" + id).textContent = AQ_NAMES[g];
+  $("d" + id).style.background = AQ_COLORS[g];
+}
+async function loadAir(lat, lon) {
+  try {
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), 10000);
+    const r = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=pm10,pm2_5&timezone=Asia%2FSeoul`, { signal: ctl.signal });
+    clearTimeout(to);
+    if (!r.ok) throw new Error("대기질 응답 " + r.status);
+    const c = (await r.json()).current;
+    const g10 = grade10(c.pm10), g25 = grade25(c.pm2_5), worst = Math.max(g10, g25);
+    airCell("10", c.pm10, g10); airCell("25", c.pm2_5, g25);
+    const b = $("aqBadge"); b.textContent = "대기질 " + AQ_NAMES[worst]; b.style.background = AQ_COLORS[worst];
+    $("aqNote").textContent = (worst >= 2 ? "😷 마스크를 챙기세요. " : "") + "모델 추정치라 실제 측정값과 다를 수 있어요.";
+  } catch (e) {
+    $("aqBadge").textContent = "측정 불가"; $("aqBadge").style.background = "#b9b2c9";
+    $("aqNote").textContent = "대기질을 가져오지 못했어요.";
+  }
+}
+
 function renderWeekly(dd) {
   const box = $("week"); box.innerHTML = "";
   const lo = Math.min(...dd.temperature_2m_min), hi = Math.max(...dd.temperature_2m_max), span = Math.max(1, hi - lo);
@@ -221,6 +267,7 @@ async function load(lat, lon) {
     document.body.className = d.is_day ? theme : "night";
     renderHourly(data.hourly, d.time);
     renderWeekly(data.daily);
+    loadAir(lat, lon);
     setFx(theme, !d.is_day);
   } catch (e) {
     $("icon").textContent = "😢";
