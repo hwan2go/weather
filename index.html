@@ -41,6 +41,19 @@
   .msg { margin-top: 18px; padding: 10px 14px; border-radius: 18px; background: rgba(255,255,255,.6); font-size: 15px; }
   body.night .msg { background: rgba(255,255,255,.15); }
   .hourly { margin-top: 18px; text-align: left; }
+  .sec-title { display: flex; align-items: baseline; justify-content: space-between; margin: 0 4px 8px; }
+  .sec-title b { font-size: 15px; font-weight: normal; }
+  .sec-title span { font-size: 11px; opacity: .6; }
+  .weekly { margin-top: 20px; padding: 14px 12px 8px; text-align: left; border-radius: 26px; background: rgba(255,255,255,.55); }
+  body.night .weekly { background: rgba(255,255,255,.12); }
+  .day { display: grid; grid-template-columns: 38px 30px 40px 28px 1fr 28px; align-items: center; gap: 4px; padding: 7px 2px; border-top: 1px dashed rgba(120,100,160,.25); font-size: 15px; }
+  .day:first-of-type { border-top: 0; }
+  .day .dn { font-size: 14px; } .day .dn.sat { color: #5b8def; } .day .dn.sun { color: #e8648c; } .day .dn.today { font-weight: bold; }
+  .day .di { font-size: 22px; text-align: center; }
+  .day .dp { font-size: 11px; opacity: .75; }
+  .day .lo { text-align: right; opacity: .7; } .day .hi { text-align: left; }
+  .bar { position: relative; height: 6px; border-radius: 3px; background: rgba(120,100,160,.18); }
+  .bar i { position: absolute; top: 0; bottom: 0; border-radius: 3px; background: linear-gradient(90deg, #8ec5ff, #ffb6cc); }
   .hourly h2 { font-size: 15px; font-weight: normal; margin: 0 0 8px 4px; opacity: .8; }
   .strip { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 10px; scroll-snap-type: x proximity; }
   .hr { flex: 0 0 auto; width: 62px; padding: 10px 0; text-align: center; border-radius: 20px;
@@ -66,7 +79,8 @@
   <div class="desc" id="desc">불러오는 중...</div>
   <div class="feel" id="feel"></div>
   <div class="msg" id="msg">날씨를 가져오고 있어요 ☁️</div>
-  <div class="hourly"><h2>시간별 예보</h2><div class="strip" id="strip"></div></div>
+  <div class="hourly"><div class="sec-title"><b>⏰ 시간별 예보</b><span>옆으로 밀어 보세요 →</span></div><div class="strip" id="strip"></div></div>
+  <div class="weekly"><div class="sec-title"><b>🗓️ 주간 예보</b><span>7일</span></div><div id="week"></div></div>
   <button id="loc">📍 내 위치로 보기</button>
   <div class="small" id="small"></div>
 </div>
@@ -152,11 +166,30 @@ function renderHourly(h, nowTime) {
   }
 }
 
+function renderWeekly(dd) {
+  const box = $("week"); box.innerHTML = "";
+  const lo = Math.min(...dd.temperature_2m_min), hi = Math.max(...dd.temperature_2m_max), span = Math.max(1, hi - lo);
+  dd.time.forEach((d, i) => {
+    const [icon] = wmo(dd.weather_code[i], 1);
+    const wd = new Date(d + "T00:00:00").getDay();
+    const name = i === 0 ? "오늘" : "일월화수목금토"[wd];
+    const mn = dd.temperature_2m_min[i], mx = dd.temperature_2m_max[i], pop = dd.precipitation_probability_max[i];
+    const row = document.createElement("div"); row.className = "day";
+    row.innerHTML = '<div class="dn' + (i === 0 ? " today" : wd === 6 ? " sat" : wd === 0 ? " sun" : "") + '">' + name + '</div>' +
+      '<div class="di">' + icon + '</div>' +
+      '<div class="dp">' + (pop > 0 ? "💧" + pop + "%" : "") + '</div>' +
+      '<div class="lo">' + Math.round(mn) + '°</div>' +
+      '<div class="bar"><i style="left:' + ((mn - lo) / span * 100) + '%;right:' + ((hi - mx) / span * 100) + '%"></i></div>' +
+      '<div class="hi">' + Math.round(mx) + '°</div>';
+    box.appendChild(row);
+  });
+}
+
 async function load(lat, lon) {
   try {
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}` +
       `&current=temperature_2m,apparent_temperature,weather_code,is_day` +
-      `&hourly=temperature_2m,weather_code,precipitation_probability,is_day&forecast_days=2&timezone=Asia%2FSeoul`;
+      `&hourly=temperature_2m,weather_code,precipitation_probability,is_day&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&forecast_days=7&timezone=Asia%2FSeoul`;
     const ctl = new AbortController(); const to = setTimeout(() => ctl.abort(), 10000);
     const res = await fetch(url, { signal: ctl.signal }); clearTimeout(to);
     if (!res.ok) throw new Error("서버 응답 " + res.status);
@@ -172,6 +205,7 @@ async function load(lat, lon) {
     $("small").textContent = "기준 " + d.time.replace("T", " ") + " · Open-Meteo";
     document.body.className = d.is_day ? theme : "night";
     renderHourly(data.hourly, d.time);
+    renderWeekly(data.daily);
     setFx(theme, !d.is_day);
   } catch (e) {
     $("icon").textContent = "😢";
