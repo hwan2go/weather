@@ -35,6 +35,9 @@
   .time { font-size: 52px; letter-spacing: 2px; margin: 2px 0 6px; }
   .icon { font-size: 96px; line-height: 1.1; animation: float 3s ease-in-out infinite; }
   @keyframes float { 50% { transform: translateY(-8px); } }
+  .tlabel { display: inline-block; margin-top: 2px; padding: 3px 12px; border-radius: 14px; font-size: 13px; background: rgba(255,255,255,.6); }
+  body.night .tlabel { background: rgba(255,255,255,.15); }
+  .tlabel.old { background: #ffe1a8; color: #7a4b00; }
   .temp { font-size: 64px; margin: 4px 0 0; }
   .desc { font-size: 20px; margin-top: 2px; }
   .feel { font-size: 14px; opacity: .75; margin-top: 8px; }
@@ -77,6 +80,7 @@
   <div class="date" id="date"></div>
   <div class="time" id="time">--:--</div>
   <div class="icon" id="icon">⏳</div>
+  <div class="tlabel" id="tlabel">현재 기온</div>
   <div class="temp" id="temp">--°</div>
   <div class="desc" id="desc">불러오는 중...</div>
   <div class="feel" id="feel"></div>
@@ -201,6 +205,10 @@ async function load(lat, lon) {
     const t = Math.round(d.temperature_2m);
     $("icon").textContent = icon;
     $("temp").textContent = t + "°";
+    const ago = Math.max(0, Math.round((Date.now() - Date.parse(d.time + ":00+09:00")) / 60000));
+    const agoTxt = ago < 1 ? "방금" : ago < 60 ? ago + "분 전" : Math.floor(ago / 60) + "시간 " + (ago % 60) + "분 전";
+    $("tlabel").textContent = "현재 기온 · " + d.time.slice(11, 16) + " 기준 (" + agoTxt + ")";
+    $("tlabel").classList.toggle("old", ago >= 90);
     $("desc").textContent = desc;
     $("feel").textContent = "체감 " + Math.round(d.apparent_temperature) + "°";
     $("msg").textContent = message(t, theme);
